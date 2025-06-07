@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flashcards Learning App</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f4f6fa; }
+    .container { max-width: 600px; margin: 0 auto; padding: 1.5rem; }
+    h1 { text-align: center; color: #2d3a4b; }
+    .card, .login, .register, .progress, .quiz { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; margin-bottom: 1.5rem; padding: 1.5rem; }
+    .card img { max-width: 100%; max-height: 180px; display: block; margin: 0.5rem auto; }
+    .actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+    .actions button { padding: 0.3rem 0.8rem; border: none; border-radius: 4px; cursor: pointer; }
+    .actions .edit { background: #f7c948; color: #fff; }
+    .actions .delete { background: #e74c3c; color: #fff; }
+    .actions .save { background: #27ae60; color: #fff; }
+    .actions .cancel { background: #b2bec3; color: #333; }
+    .flashcard-form input, .flashcard-form textarea { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
+    .flashcard-form label { font-weight: 500; }
+    .navbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .navbar button { background: #2d3a4b; color: #fff; border: none; border-radius: 4px; padding: 0.5rem 1rem; cursor: pointer; }
+    .quiz { text-align: center; }
+    .quiz .question { font-size: 1.2rem; margin-bottom: 1rem; }
+    .quiz .answer { font-size: 1.1rem; color: #27ae60; margin-bottom: 1rem; }
+    .quiz .quiz-actions button { margin: 0 0.5rem; }
+    .progress-bar { background: #e0e0e0; border-radius: 4px; overflow: hidden; height: 16px; margin-bottom: 0.5rem; }
+    .progress-bar-inner { background: #27ae60; height: 100%; transition: width 0.3s; }
+    @media (max-width: 700px) { .container { padding: 0.5rem; } }
+    @media (max-width: 500px) { .card, .login, .register, .progress, .quiz { padding: 0.7rem; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script type="text/babel">
+const API = 'https://YOUR_PYTHONANYWHERE_DOMAIN/api'; // Change this to your backend URL
+
+function fetchAPI(path, options = {}) {
+  return fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    ...options,
+  }).then(r => r.json());
+}
+
+function FlashcardForm({ onSave, onCancel, initial }) {
+  const [topic, setTopic] = React.useState(initial?.topic || '');
+  const [subtopic, setSubtopic] = React.useState(initial?.subtopic || '');
+  const [question, setQuestion] = React.useState(initial?.question || '');
+  const [answer, setAnswer] = React.useState(initial?.answer || '');
+  const [image, setImage] = React.useState(initial?.image_base64 || '');
+  const handleImage = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setImage(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+  return (
+    <form className="flashcard-form" onSubmit={e => { e.preventDefault(); onSave({ topic, subtopic, question, answer, image_base64: image }); }}>
+      <label>Topic</label>
+      <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="Topic" required />
+      <label>Subtopic</label>
+      <input value={subtopic} onChange={e => setSubtopic(e.target.value)} placeholder="Subtopic" required />
+      <label>Question</label>
+      <textarea value={question} onChange={e => setQuestion(e.target.value)} required />
+      <label>Answer</label>
+      <textarea value={answer} onChange={e => setAnswer(e.target.value)} required />
+      <label>Image (optional)</label>
+      <input type="file" accept="image/*" onChange={handleImage} />
+      {image && <img src={image} alt="preview" style={{ maxHeight: 100, margin: '0.5rem 0' }} />}
+      <div className="actions">
+        <button className="save" type="submit">Save</button>
+        <button className="cancel" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function ProgressBar({ correct, total }) {
+  const percent = total ? Math.round((correct / total) * 100) : 0;
+  return (
+    <div className="progress-bar">
+      <div className="progress-bar-inner" style={{ width: percent + '%' }}></div>
+    </div>
+  );
+}
+
+function Progress({ progress, flashcards }) {
+  const total = flashcards.length;
+  const correct = progress.reduce((sum, p) => sum + (p.correct_count > 0 ? 1 : 0), 0);
+  return (
+    <div className="progress">
+      <h3>Progress</h3>
+      <ProgressBar correct={correct} total={total} />
+      <div>{correct} of {total} flashcards answered correctly at least once.</div>
+    </div>
+  );
+}
+
+function Quiz({ flashcards, progress, onResult }) {
+  const [idx, setIdx] = React.useState(0);
+  const [showAnswer, setShowAnswer] = React.useState(false);
+  const [done, setDone] = React.useState(false);
+  const [results, setResults] = React.useState([]);
+  const cards = React.useMemo(() => {
+    // Sort by least reviewed, then random
+    const withProgress = flashcards.map(card => {
+      const p = progress.find(pr => pr.flashcard_id === card.id) || {};
+      return { ...card, correct_count: p.correct_count || 0, last_reviewed: p.last_reviewed || '' };
+    });
+    return withProgress.sort((a, b) => (a.correct_count - b.correct_count) || (Math.random() - 0.5));
+  }, [flashcards, progress]);
+  if (!cards.length) return <div className="quiz">No flashcards to quiz.</div>;
+  if (done) return (
+    <div className="quiz">
+      <h3>Quiz Complete!</h3>
+      <div>You answered {results.filter(r => r).length} out of {cards.length} correctly.</div>
+      <button onClick={() => { setIdx(0); setDone(false); setResults([]); setShowAnswer(false); }}>Restart Quiz</button>
+    </div>
+  );
+  const card = cards[idx];
+  return (
+    <div className="quiz">
+      <div><b>Topic:</b> {card.topic || <span style={{color:'#aaa'}}>None</span>} &nbsp; <b>Subtopic:</b> {card.subtopic || <span style={{color:'#aaa'}}>None</span>}</div>
+      <div className="question">Q: {card.question}</div>
+      {card.image_base64 && <img src={card.image_base64} alt="card" style={{ maxHeight: 120, margin: '0.5rem auto' }} />}
+      {showAnswer ? <div className="answer">A: {card.answer}</div> : <button onClick={() => setShowAnswer(true)}>Show Answer</button>}
+      <div className="quiz-actions">
+        <button onClick={() => {
+          onResult(card.id, true);
+          setResults([...results, true]);
+          setShowAnswer(false);
+          if (idx + 1 < cards.length) setIdx(idx + 1); else setDone(true);
+        }}>Correct</button>
+        <button onClick={() => {
+          onResult(card.id, false);
+          setResults([...results, false]);
+          setShowAnswer(false);
+          if (idx + 1 < cards.length) setIdx(idx + 1); else setDone(true);
+        }}>Incorrect</button>
+      </div>
+    </div>
+  );
+}
+
+function FlashcardsApp() {
+  const [user, setUser] = React.useState(null);
+  const [mode, setMode] = React.useState('list'); // list | add | edit | quiz
+  const [flashcards, setFlashcards] = React.useState([]);
+  const [progress, setProgress] = React.useState([]);
+  const [editCard, setEditCard] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    if (user) {
+      setLoading(true);
+      Promise.all([
+        fetchAPI(`/flashcards?user_id=${user.user_id}`),
+        fetchAPI(`/progress?user_id=${user.user_id}`)
+      ]).then(([cards, prog]) => {
+        setFlashcards(cards);
+        setProgress(prog);
+        setLoading(false);
+      });
+    }
+  }, [user]);
+
+  const handleSave = (data) => {
+    setLoading(true);
+    if (editCard) {
+      fetchAPI(`/flashcards/${editCard.id}`, { method: 'PUT', body: JSON.stringify(data) })
+        .then(() => {
+          setMode('list'); setEditCard(null);
+          return fetchAPI(`/flashcards?user_id=${user.user_id}`);
+        })
+        .then(setFlashcards).finally(() => setLoading(false));
+    } else {
+      fetchAPI('/flashcards', { method: 'POST', body: JSON.stringify({ ...data, user_id: user.user_id }) })
+        .then(() => {
+          setMode('list');
+          return fetchAPI(`/flashcards?user_id=${user.user_id}`);
+        })
+        .then(setFlashcards).finally(() => setLoading(false));
+    }
+  };
+
+  const handleDelete = (id) => {
+    if (!window.confirm('Delete this flashcard?')) return;
+    setLoading(true);
+    fetchAPI(`/flashcards/${id}`, { method: 'DELETE' })
+      .then(() => fetchAPI(`/flashcards?user_id=${user.user_id}`))
+      .then(setFlashcards).finally(() => setLoading(false));
+  };
+
+  const handleQuizResult = (cardId, correct) => {
+    fetchAPI('/progress', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: user.user_id, flashcard_id: cardId, correct })
+    }).then(() => fetchAPI(`/progress?user_id=${user.user_id}`)).then(setProgress);
+  };
+
+  if (!user) return <Auth onLogin={setUser} />;
+
+  return (
+    <div className="container">
+      <div className="navbar">
+        <h1>Flashcards</h1>
+        <div>
+          <button onClick={() => setMode('list')}>My Cards</button>
+          <button onClick={() => setMode('quiz')}>Quiz</button>
+          <button onClick={() => setMode('progress')}>Progress</button>
+          <button onClick={() => { setUser(null); }}>Logout</button>
+        </div>
+      </div>
+      {loading && <div>Loading...</div>}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
+      {mode === 'list' && (
+        <>
+          <button style={{ marginBottom: 10 }} onClick={() => { setEditCard(null); setMode('add'); }}>Add Flashcard</button>
+          {flashcards.length === 0 && <div>No flashcards yet.</div>}
+          {flashcards.map(card => (
+            <div className="card" key={card.id}>
+              <div><b>Topic:</b> {card.topic || <span style={{color:'#aaa'}}>None</span>}</div>
+              <div><b>Subtopic:</b> {card.subtopic || <span style={{color:'#aaa'}}>None</span>}</div>
+              <div><b>Q:</b> {card.question}</div>
+              {card.image_base64 && <img src={card.image_base64} alt="card" />}
+              <div><b>A:</b> {card.answer}</div>
+              <div className="actions">
+                <button className="edit" onClick={() => { setEditCard(card); setMode('edit'); }}>Edit</button>
+                <button className="delete" onClick={() => handleDelete(card.id)}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+      {(mode === 'add' || mode === 'edit') && (
+        <div className="card">
+          <FlashcardForm
+            initial={editCard}
+            onSave={handleSave}
+            onCancel={() => { setMode('list'); setEditCard(null); }}
+          />
+        </div>
+      )}
+      {mode === 'quiz' && (
+        <Quiz flashcards={flashcards} progress={progress} onResult={handleQuizResult} />
+      )}
+      {mode === 'progress' && (
+        <Progress progress={progress} flashcards={flashcards} />
+      )}
+    </div>
+  );
+}
+
+function Auth({ onLogin }) {
+  const [mode, setMode] = React.useState('login');
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+  const handleSubmit = e => {
+    e.preventDefault();
+    fetchAPI(mode === 'login' ? '/login' : '/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    }).then(res => {
+      if (res.user_id) onLogin(res);
+      else if (res.message) setMode('login');
+      else setError(res.error || 'Error');
+    });
+  };
+  return (
+    <div className="container">
+      <div className={mode}>
+        <h2>{mode === 'login' ? 'Login' : 'Register'}</h2>
+        <form onSubmit={handleSubmit}>
+          <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <button type="submit">{mode === 'login' ? 'Login' : 'Register'}</button>
+        </form>
+        <div style={{ marginTop: 10 }}>
+          {mode === 'login' ? (
+            <span>New user? <button onClick={() => { setMode('register'); setError(''); }}>Register</button></span>
+          ) : (
+            <span>Already have an account? <button onClick={() => { setMode('login'); setError(''); }}>Login</button></span>
+          )}
+        </div>
+        {error && <div style={{ color: 'red' }}>{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<FlashcardsApp />);
+  </script>
+</body>
+</html>

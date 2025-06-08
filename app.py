@@ -10,12 +10,12 @@ import json
 with open('db_config.json') as f:
     db_cfg = json.load(f)
 DB_HOST = db_cfg.get('DB_HOST', 'localhost')
-DB_USER = db_cfg.get('DB_USER', 'your_mysql_user')
-DB_PASSWORD = db_cfg.get('DB_PASSWORD', 'your_mysql_password')
-DB_NAME = db_cfg.get('DB_NAME', 'flashcards_db')
+DB_USER = db_cfg.get('DB_USER', 'ashish')
+DB_PASSWORD = db_cfg.get('DB_PASSWORD', 'pass')
+DB_NAME = db_cfg.get('DB_NAME', 'flashcards_app')
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
 
 # MySQL connection
 conn = mysql.connector.connect(
@@ -67,11 +67,22 @@ def register():
     if not username or not password:
         return jsonify({'error': 'Username and password required'}), 400
     password_hash = generate_password_hash(password)
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     try:
         cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, password_hash))
-        conn.commit()
+        conn_local.commit()
+        cursor.close()
+        conn_local.close()
         return jsonify({'message': 'User registered successfully'})
     except mysql.connector.Error as err:
+        cursor.close()
+        conn_local.close()
         return jsonify({'error': str(err)}), 400
 
 # User login
@@ -80,8 +91,17 @@ def login():
     data = request.json
     username = data.get('username')
     password = data.get('password')
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute("SELECT id, password_hash FROM users WHERE username=%s", (username,))
     user = cursor.fetchone()
+    cursor.close()
+    conn_local.close()
     if user and check_password_hash(user[1], password):
         return jsonify({'message': 'Login successful', 'user_id': user[0]})
     return jsonify({'error': 'Invalid credentials'}), 401
@@ -90,10 +110,19 @@ def login():
 @app.route('/api/flashcards', methods=['GET'])
 def get_flashcards():
     user_id = request.args.get('user_id')
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute("SELECT id, topic, subtopic, question, answer, image_base64 FROM flashcards WHERE user_id=%s", (user_id,))
     cards = [
         {'id': row[0], 'topic': row[1], 'subtopic': row[2], 'question': row[3], 'answer': row[4], 'image_base64': row[5]} for row in cursor.fetchall()
     ]
+    cursor.close()
+    conn_local.close()
     return jsonify(cards)
 
 @app.route('/api/flashcards', methods=['POST'])
@@ -105,11 +134,20 @@ def create_flashcard():
     question = data.get('question')
     answer = data.get('answer')
     image_base64 = data.get('image_base64', None)
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute(
-        "INSERT INTO flashcards (user_id, topic, subtopic, question, answer, image_base64) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        "INSERT INTO flashcards (user_id, topic, subtopic, question, answer, image_base64) VALUES (%s, %s, %s, %s, %s, %s)",
         (user_id, topic, subtopic, question, answer, image_base64)
     )
-    conn.commit()
+    conn_local.commit()
+    cursor.close()
+    conn_local.close()
     return jsonify({'message': 'Flashcard created'})
 
 @app.route('/api/flashcards/<int:card_id>', methods=['PUT'])
@@ -120,27 +158,54 @@ def update_flashcard(card_id):
     question = data.get('question')
     answer = data.get('answer')
     image_base64 = data.get('image_base64', None)
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute(
         "UPDATE flashcards SET topic=%s, subtopic=%s, question=%s, answer=%s, image_base64=%s WHERE id=%s",
         (topic, subtopic, question, answer, image_base64, card_id)
     )
-    conn.commit()
+    conn_local.commit()
+    cursor.close()
+    conn_local.close()
     return jsonify({'message': 'Flashcard updated'})
 
 @app.route('/api/flashcards/<int:card_id>', methods=['DELETE'])
 def delete_flashcard(card_id):
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute("DELETE FROM flashcards WHERE id=%s", (card_id,))
-    conn.commit()
+    conn_local.commit()
+    cursor.close()
+    conn_local.close()
     return jsonify({'message': 'Flashcard deleted'})
 
 # Progress tracking
 @app.route('/api/progress', methods=['GET'])
 def get_progress():
     user_id = request.args.get('user_id')
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute("SELECT flashcard_id, correct_count, incorrect_count, last_reviewed FROM progress WHERE user_id=%s", (user_id,))
     progress = [
         {'flashcard_id': row[0], 'correct_count': row[1], 'incorrect_count': row[2], 'last_reviewed': row[3]} for row in cursor.fetchall()
     ]
+    cursor.close()
+    conn_local.close()
     return jsonify(progress)
 
 @app.route('/api/progress', methods=['POST'])
@@ -151,6 +216,13 @@ def update_progress():
     correct = data.get('correct')
     from datetime import datetime
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn_local = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = conn_local.cursor()
     cursor.execute("SELECT id FROM progress WHERE user_id=%s AND flashcard_id=%s", (user_id, flashcard_id))
     row = cursor.fetchone()
     if row:
@@ -163,7 +235,9 @@ def update_progress():
             "INSERT INTO progress (user_id, flashcard_id, correct_count, incorrect_count, last_reviewed) VALUES (%s, %s, %s, %s, %s)",
             (user_id, flashcard_id, 1 if correct else 0, 0 if correct else 1, now)
         )
-    conn.commit()
+    conn_local.commit()
+    cursor.close()
+    conn_local.close()
     return jsonify({'message': 'Progress updated'})
 
 # Serve the frontend HTML (if hosted together)

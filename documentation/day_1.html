@@ -1,23 +1,34 @@
 <pre>
+<h2>1. Install the necessary software like:</h2>
 
-1. Created the public repository on GitHub.
+Ananconda
+VS Code 
+Git SCM
+MySQL 
+
+<h2>2. Create Conda environment</h2>
+
+conda create --name myenv python=3.12
+
+<h2>3. Created the public repository on GitHub.</h2>
 
 https://github.com/ashishjain1547/flashcards_learning_app
 
-2. Installed VS Code and configured it with GitHub Copilot for Agentic Programming.
+<h2>4. Configure GitHub Copilot</h2>
+Installed VS Code and configured it with GitHub Copilot for Agentic Programming.
 
-3. Set up space for deployment on pythonanywhere.com:
+<h2>5. Set up space for deployment on pythonanywhere.com</h2>
 
 https://www.pythonanywhere.com/user/ashishjaindrive1/
 
-4. DB Details:
+<h2>6. DB Details</h2>
 
 Database host address: ashishjaindrive1.mysql.pythonanywhere-services.com
 Username: ashishjaindrive1
 
 Database name: ashishjaindrive1$default
 
-5. Prompt:
+<h2>7. Prompt</h2>
 
 I want to create a flashcards learning app that allows users to create, edit, and delete (and most importantly play around with / quiz oneself using those flashcards) flashcards. The app should have a user-friendly interface and flashcards should support images. It should also allow users to track their progress and review flashcards based on their performance.
 
@@ -30,7 +41,7 @@ All the Python code will be in a single Python file (FYI: hosted on pythonanywhe
 
 The app should be responsive and work well on both desktop and mobile devices.
 
-6. Deployment
+<h2>8. Deployment</h2>
 
 What all configuration do I now need to make to deploy it?
 
@@ -38,7 +49,8 @@ What all configuration do I now need to make to deploy it?
 
 To deploy your Flashcards Learning App using your current setup (Flask backend on PythonAnywhere, React frontend as a single HTML file on Blogger or similar), follow these steps:
 
-1. Backend (Flask on PythonAnywhere)
+<b>1. Backend (Flask on PythonAnywhere)</b>
+
 a. Prepare your code
 Make sure your app.py is complete and working locally.
 Ensure your requirements.txt contains:
@@ -49,7 +61,17 @@ mysql-connector-python
 werkzeug
 
 
-b. Set up MySQL on PythonAnywhere
+
+<i>$ pwd
+/home/jain/Desktop/ws/public/flashcards_learning_app
+
+$ conda activate myenv
+
+$ pip install -r requirements.txt </i>
+
+
+<b>b. Set up MySQL on PythonAnywhere</b>
+
 Go to the PythonAnywhere dashboard → Databases → Add a new MySQL database.
 Note the database name, username, and password.
 c. Update your configuration
@@ -60,20 +82,31 @@ DB_USER = 'your_mysql_username'
 DB_PASSWORD = 'your_mysql_password'
 DB_NAME = 'your_mysql_dbname'
 
+<h3>Configuration for localhost</h3>
+
+<i>{
+    "DB_HOST": "localhost", 
+    "DB_USER": "ashish", 
+    "DB_PASSWORD": "pass", 
+    "DB_NAME": "flashcards_app"
+}</i>
 
 You can use environment variables or hardcode for testing.
+
 d. Upload your files
 Upload app.py and requirements.txt to your PythonAnywhere files.
+
 e. Install dependencies
 Open a Bash console on PythonAnywhere and run:
 
-pip install --user -r requirements.txt
-
+<i>pip install --user -r requirements.txt</i>
 
 f. Set up your Flask web app
+
 Go to the Web tab → Add a new web app → Choose Flask.
 Set the source code location to your uploaded app.py.
 Set the WSGI file to point to your Flask app (usually app).
+
 g. Allow CORS
 You already have CORS(app) in your code, so your frontend can communicate with the backend.
 2. Frontend (HTML on Blogger or Static Host)

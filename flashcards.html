@@ -36,7 +36,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
   <script type="text/babel">
-const API = 'https://YOUR_PYTHONANYWHERE_DOMAIN/api'; // Change this to your backend URL
+const API = 'http://127.0.0.1:5000/api'; // Change this to your backend URL
 
 function fetchAPI(path, options = {}) {
   return fetch(API + path, {
@@ -47,11 +47,11 @@ function fetchAPI(path, options = {}) {
 }
 
 function FlashcardForm({ onSave, onCancel, initial }) {
-  const [topic, setTopic] = React.useState(initial?.topic || '');
-  const [subtopic, setSubtopic] = React.useState(initial?.subtopic || '');
-  const [question, setQuestion] = React.useState(initial?.question || '');
-  const [answer, setAnswer] = React.useState(initial?.answer || '');
-  const [image, setImage] = React.useState(initial?.image_base64 || '');
+  const [topic, setTopic] = React.useState((initial && initial.topic) || '');
+  const [subtopic, setSubtopic] = React.useState((initial && initial.subtopic) || '');
+  const [question, setQuestion] = React.useState((initial && initial.question) || '');
+  const [answer, setAnswer] = React.useState((initial && initial.answer) || '');
+  const [image, setImage] = React.useState((initial && initial.image_base64) || '');
   const handleImage = e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -220,7 +220,7 @@ function FlashcardsApp() {
       {loading && <div>Loading...</div>}
       {error && <div style={{ color: 'red' }}>{error}</div>}
       {mode === 'list' && (
-        <>
+        <React.Fragment>
           <button style={{ marginBottom: 10 }} onClick={() => { setEditCard(null); setMode('add'); }}>Add Flashcard</button>
           {flashcards.length === 0 && <div>No flashcards yet.</div>}
           {flashcards.map(card => (
@@ -236,7 +236,7 @@ function FlashcardsApp() {
               </div>
             </div>
           ))}
-        </>
+        </React.Fragment>
       )}
       {(mode === 'add' || mode === 'edit') && (
         <div className="card">
